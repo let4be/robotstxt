@@ -16,8 +16,6 @@
 
 #![allow(unused_variables, dead_code)]
 
-use std::borrow::Cow;
-
 use crate::RobotsParseHandler;
 
 /// Instead of just maintaining a Boolean indicating whether a given line has
@@ -219,7 +217,7 @@ impl RobotsMatchStrategy for LongestMatchRobotsMatchStrategy {
 /// robots.txt and the crawl agent.
 /// The RobotsMatcher can be re-used for URLs/robots.txt but is not thread-safe.
 #[derive(Default)]
-pub struct RobotsMatcher<'a, S: RobotsMatchStrategy> {
+pub struct RobotsMatcher<S: RobotsMatchStrategy> {
     /// Characters of 'url' matching Allow.
     allow: MatchHierarchy,
     /// Characters of 'url' matching Disallow.
@@ -232,12 +230,9 @@ pub struct RobotsMatcher<'a, S: RobotsMatchStrategy> {
     ever_seen_specific_agent: bool,
     /// True if saw any key: value pair.
     seen_separator: bool,
-    /// The path we want to pattern match. Not owned and only a valid pointer
-    /// during the lifetime of [allowed_by_robots](RobotsMatcher::allowed_by_robots()) calls.
-    path: Cow<'a, str>,
-    /// The User-Agents we are interested in. Not owned and only a valid
-    /// pointer during the lifetime of [allowed_by_robots](RobotsMatcher::allowed_by_robots()) calls.
-    user_agents: Vec<&'a str>,
+
+    path: String,
+    user_agents: Vec<String>,
     match_strategy: S,
 }
 
@@ -265,13 +260,13 @@ enum ParseInvoke {
     }
 }
 
-struct CachingRobotsParseHandler<'a, S: RobotsMatchStrategy> {
+struct CachingRobotsParseHandler<S: RobotsMatchStrategy> {
     invokes: Vec<ParseInvoke>,
-    matcher: RobotsMatcher<'a, S>,
+    matcher: RobotsMatcher<S>,
 }
 
-impl<'a, S: RobotsMatchStrategy> CachingRobotsParseHandler<'a, S> {
-    pub fn new(matcher: RobotsMatcher<'a, S>) -> Self {
+impl<S: RobotsMatchStrategy> CachingRobotsParseHandler<S> {
+    pub fn new(matcher: RobotsMatcher<S>) -> Self {
         Self {
             invokes: vec![],
             matcher,
@@ -302,15 +297,15 @@ impl<'a, S: RobotsMatchStrategy> CachingRobotsParseHandler<'a, S> {
         self.matcher.handle_robots_end();
     }
 
-    pub fn allowed_by_robots(&mut self, user_agents: Vec<&'a str>, url: &'a str) -> bool {
-        let path = super::get_path_params_query(url);
-        self.matcher.init_user_agents_and_path(user_agents, path);
+    pub fn allowed_by_robots(&mut self, user_agents: Vec<&str>, url: &str) -> bool {
+        let path = super::get_path_params_query(&url);
+        self.matcher.init_user_agents_and_path(user_agents, &path);
         self.replay();
         !self.matcher.disallow()
     }
 }
 
-impl<'a, S: RobotsMatchStrategy> RobotsParseHandler for CachingRobotsParseHandler<'a, S> {
+impl<S: RobotsMatchStrategy> RobotsParseHandler for CachingRobotsParseHandler<S> {
     fn handle_robots_start(&mut self) {}
 
     fn handle_robots_end(&mut self) {}
@@ -352,12 +347,12 @@ impl<'a, S: RobotsMatchStrategy> RobotsParseHandler for CachingRobotsParseHandle
     }
 }
 
-pub struct CachingRobotsMatcher<'a, S: RobotsMatchStrategy> {
-    handler: CachingRobotsParseHandler<'a, S>
+pub struct CachingRobotsMatcher<S: RobotsMatchStrategy> {
+    handler: CachingRobotsParseHandler<S>
 }
 
-impl<'a, S: RobotsMatchStrategy> CachingRobotsMatcher<'a, S> {
-    pub fn new(matcher: RobotsMatcher<'a, S>, robots_body: &str) -> Self {
+impl<S: RobotsMatchStrategy> CachingRobotsMatcher<S> {
+    pub fn new(matcher: RobotsMatcher<S>, robots_body: &str) -> Self {
         let mut s = Self {
             handler: CachingRobotsParseHandler::new(matcher)
         };
@@ -365,30 +360,30 @@ impl<'a, S: RobotsMatchStrategy> CachingRobotsMatcher<'a, S> {
         s
     }
 
-    pub fn allowed_by_robots(&mut self, user_agents: Vec<&'a str>, url: &'a str) -> bool {
+    pub fn allowed_by_robots(&mut self, user_agents: Vec<&str>, url: &str) -> bool {
         self.handler.allowed_by_robots(user_agents, url)
     }
 
-    pub fn one_agent_allowed_by_robots(&mut self, user_agent: &'a str, url: &'a str) -> bool {
+    pub fn one_agent_allowed_by_robots(&mut self, user_agent: &str, url: &str) -> bool {
         self.handler.allowed_by_robots(vec![user_agent], url)
     }
 }
 
-impl<'a, S: RobotsMatchStrategy> RobotsMatcher<'a, S> {
+impl<'a, S: RobotsMatchStrategy> RobotsMatcher<S> {
     /// Initialize next path and user-agents to check. Path must contain only the
     /// path, params, and query (if any) of the url and must start with a '/'.
-    fn init_user_agents_and_path(&mut self, user_agents: Vec<&'a str>, path: Cow<'a, str>) {
-        self.path = path;
-        self.user_agents = user_agents;
+    fn init_user_agents_and_path(&mut self, user_agents: Vec<&str>, path: &str) {
+        self.path = String::from(path);
+        self.user_agents = user_agents.into_iter().map( String::from).collect();
     }
 
     /// Returns true if 'url' is allowed to be fetched by any member of the
     /// "user_agents" vector. 'url' must be %-encoded according to RFC3986.
     pub fn allowed_by_robots(
         &mut self,
-        robots_body: &'a str,
-        user_agents: Vec<&'a str>,
-        url: &'a str,
+        robots_body: &str,
+        user_agents: Vec<&str>,
+        url: &str,
     ) -> bool
     where
         Self: RobotsParseHandler,
@@ -396,8 +391,8 @@ impl<'a, S: RobotsMatchStrategy> RobotsMatcher<'a, S> {
         // The url is not normalized (escaped, percent encoded) here because the user
         // is asked to provide it in escaped form already.
         let path = super::get_path_params_query(url);
-        self.init_user_agents_and_path(user_agents, path);
-        super::parse_robotstxt(robots_body, self);
+        self.init_user_agents_and_path(user_agents, &path);
+        super::parse_robotstxt(&robots_body, self);
         !self.disallow()
     }
 
@@ -405,9 +400,9 @@ impl<'a, S: RobotsMatchStrategy> RobotsMatcher<'a, S> {
     /// be %-encoded according to RFC3986.
     pub fn one_agent_allowed_by_robots(
         &mut self,
-        robots_txt: &'a str,
-        user_agent: &'a str,
-        url: &'a str,
+        robots_txt: &str,
+        user_agent: &str,
+        url: &str,
     ) -> bool
     where
         Self: RobotsParseHandler,
@@ -480,7 +475,7 @@ impl<'a, S: RobotsMatchStrategy> RobotsMatcher<'a, S> {
     }
 }
 
-impl<S: RobotsMatchStrategy> RobotsParseHandler for RobotsMatcher<'_, S> {
+impl<S: RobotsMatchStrategy> RobotsParseHandler for RobotsMatcher<S> {
     fn handle_robots_start(&mut self) {
         // This is a new robots.txt file, so we need to reset all the instance member
         // variables. We do it in the same order the instance member variables are
@@ -585,7 +580,7 @@ mod test {
     #[test]
     fn test_extract_user_agent<'a>() {
         // Example: 'Googlebot/2.1' becomes 'Googlebot'
-        type Target<'a> = RobotsMatcher<'a, LongestMatchRobotsMatchStrategy>;
+        type Target = RobotsMatcher<LongestMatchRobotsMatchStrategy>;
         assert_eq!("Googlebot", Target::extract_user_agent("Googlebot/2.1"));
         assert_eq!("Googlebot", Target::extract_user_agent("Googlebot"));
         assert_eq!("Googlebot-", Target::extract_user_agent("Googlebot-"));

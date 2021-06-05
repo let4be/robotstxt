@@ -61,7 +61,7 @@ fn main() {
         }
         (_, Some(filename), Some(user_agent), Some(url)) => {
             if let Ok(robots_content) = fs::read_to_string(filename.clone()) {
-                let user_agents: Vec<&str> = vec![&user_agent];
+                let user_agents = vec![user_agent.as_str()];
                 let mut matcher = CachingRobotsMatcher::new(DefaultMatcher::default(), &robots_content);
                 let allowed = matcher.allowed_by_robots( user_agents, &url);
 
