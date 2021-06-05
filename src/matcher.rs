@@ -14,8 +14,6 @@
 // limitations under the License.
 //
 
-#![allow(unused_variables, dead_code)]
-
 use crate::RobotsParseHandler;
 
 /// Instead of just maintaining a Boolean indicating whether a given line has
@@ -27,7 +25,7 @@ use crate::RobotsParseHandler;
 ///
 /// The priority is initialized with a negative value to make sure that a match
 /// of priority 0 is higher priority than no match at all.
-struct Match {
+pub struct Match {
     priority: i32,
     line: u32,
 }
@@ -237,27 +235,27 @@ pub struct RobotsMatcher<S: RobotsMatchStrategy> {
 }
 
 enum ParseInvoke {
-    HandleUserAgent {
+    UserAgent {
         line_num: u32,
         user_agent: String,
     },
-    HandleAllow {
+    Allow {
         line_num: u32,
         value: String,
     },
-    HandleDisallow {
+    Disallow {
         line_num: u32,
         value: String,
     },
-    HandleSitemap {
+    Sitemap {
         line_num: u32,
         value: String,
     },
-    HandleUnknownAction {
+    UnknownAction {
         line_num: u32,
         action: String,
         value: String,
-    }
+    },
 }
 
 struct CachingRobotsParseHandler<S: RobotsMatchStrategy> {
@@ -277,21 +275,26 @@ impl<S: RobotsMatchStrategy> CachingRobotsParseHandler<S> {
         self.matcher.handle_robots_start();
         for invoke in &self.invokes {
             match invoke {
-                ParseInvoke::HandleUserAgent{line_num, user_agent} => {
-                    self.matcher.handle_user_agent(*line_num, &user_agent)
-                },
-                ParseInvoke::HandleAllow{line_num, value} => {
+                ParseInvoke::UserAgent {
+                    line_num,
+                    user_agent,
+                } => self.matcher.handle_user_agent(*line_num, &user_agent),
+                ParseInvoke::Allow { line_num, value } => {
                     self.matcher.handle_allow(*line_num, &value)
-                },
-                ParseInvoke::HandleDisallow{line_num, value} => {
+                }
+                ParseInvoke::Disallow { line_num, value } => {
                     self.matcher.handle_disallow(*line_num, &value)
-                },
-                ParseInvoke::HandleSitemap{line_num, value} => {
+                }
+                ParseInvoke::Sitemap { line_num, value } => {
                     self.matcher.handle_sitemap(*line_num, &value)
-                },
-                ParseInvoke::HandleUnknownAction{line_num, action, value} => {
-                    self.matcher.handle_unknown_action(*line_num, &action, &value)
-                },
+                }
+                ParseInvoke::UnknownAction {
+                    line_num,
+                    action,
+                    value,
+                } => self
+                    .matcher
+                    .handle_unknown_action(*line_num, &action, &value),
             }
         }
         self.matcher.handle_robots_end();
@@ -311,50 +314,50 @@ impl<S: RobotsMatchStrategy> RobotsParseHandler for CachingRobotsParseHandler<S>
     fn handle_robots_end(&mut self) {}
 
     fn handle_user_agent(&mut self, line_num: u32, user_agent: &str) {
-        self.invokes.push(ParseInvoke::HandleUserAgent {
+        self.invokes.push(ParseInvoke::UserAgent {
             line_num,
-            user_agent: String::from(user_agent)
+            user_agent: String::from(user_agent),
         })
     }
 
     fn handle_allow(&mut self, line_num: u32, value: &str) {
-        self.invokes.push(ParseInvoke::HandleAllow {
+        self.invokes.push(ParseInvoke::Allow {
             line_num,
-            value: String::from(value)
+            value: String::from(value),
         })
     }
 
     fn handle_disallow(&mut self, line_num: u32, value: &str) {
-        self.invokes.push(ParseInvoke::HandleDisallow {
+        self.invokes.push(ParseInvoke::Disallow {
             line_num,
-            value: String::from(value)
+            value: String::from(value),
         })
     }
 
     fn handle_sitemap(&mut self, line_num: u32, value: &str) {
-        self.invokes.push(ParseInvoke::HandleSitemap {
+        self.invokes.push(ParseInvoke::Sitemap {
             line_num,
             value: String::from(value),
         })
     }
 
     fn handle_unknown_action(&mut self, line_num: u32, action: &str, value: &str) {
-        self.invokes.push(ParseInvoke::HandleUnknownAction {
+        self.invokes.push(ParseInvoke::UnknownAction {
             line_num,
             action: String::from(action),
-            value: String::from(value)
+            value: String::from(value),
         })
     }
 }
 
 pub struct CachingRobotsMatcher<S: RobotsMatchStrategy> {
-    handler: CachingRobotsParseHandler<S>
+    handler: CachingRobotsParseHandler<S>,
 }
 
 impl<S: RobotsMatchStrategy> CachingRobotsMatcher<S> {
     pub fn new(matcher: RobotsMatcher<S>, robots_body: &str) -> Self {
         let mut s = Self {
-            handler: CachingRobotsParseHandler::new(matcher)
+            handler: CachingRobotsParseHandler::new(matcher),
         };
         super::parse_robotstxt(robots_body, &mut s.handler);
         s
@@ -374,7 +377,7 @@ impl<'a, S: RobotsMatchStrategy> RobotsMatcher<S> {
     /// path, params, and query (if any) of the url and must start with a '/'.
     fn init_user_agents_and_path(&mut self, user_agents: Vec<&str>, path: &str) {
         self.path = String::from(path);
-        self.user_agents = user_agents.into_iter().map( String::from).collect();
+        self.user_agents = user_agents.into_iter().map(String::from).collect();
     }
 
     /// Returns true if 'url' is allowed to be fetched by any member of the
@@ -455,18 +458,8 @@ impl<'a, S: RobotsMatchStrategy> RobotsMatcher<S> {
         !user_agent.is_empty() && Self::extract_user_agent(user_agent) == user_agent
     }
 
-    /// Returns true if we are disallowed from crawling a matching URI. Ignores any
-    /// rules specified for the default user agent, and bases its results only on
-    /// the specified user agents.
-    fn disallow_ignore_global(&self) -> bool {
-        if self.allow.specific.priority() > 0 || self.disallow.specific.priority() > 0 {
-            return self.disallow.specific.priority() > self.allow.specific.priority();
-        }
-        false
-    }
-
     /// Returns the line that matched or 0 if none matched.
-    fn matching_line(&self) -> u32 {
+    pub fn matching_line(&self) -> u32 {
         if self.ever_seen_specific_agent {
             return Match::higher_priority_match(&self.disallow.specific, &self.allow.specific)
                 .line();
@@ -492,7 +485,7 @@ impl<S: RobotsMatchStrategy> RobotsParseHandler for RobotsMatcher<S> {
 
     fn handle_robots_end(&mut self) {}
 
-    fn handle_user_agent(&mut self, line_num: u32, user_agent: &str) {
+    fn handle_user_agent(&mut self, _line_num: u32, user_agent: &str) {
         if self.seen_separator {
             self.seen_specific_agent = false;
             self.seen_global_agent = false;
@@ -564,11 +557,11 @@ impl<S: RobotsMatchStrategy> RobotsParseHandler for RobotsMatcher<S> {
         }
     }
 
-    fn handle_sitemap(&mut self, line_num: u32, value: &str) {
+    fn handle_sitemap(&mut self, _line_num: u32, _value: &str) {
         self.seen_separator = true;
     }
 
-    fn handle_unknown_action(&mut self, line_num: u32, action: &str, value: &str) {
+    fn handle_unknown_action(&mut self, _line_num: u32, _action: &str, _value: &str) {
         self.seen_separator = true;
     }
 }

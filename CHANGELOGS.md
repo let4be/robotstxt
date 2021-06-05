@@ -11,4 +11,3 @@
 The first implementation of the Rust port to Google Robotstxt C++ library.
 
 ## v0.1.0 (yanked)
-

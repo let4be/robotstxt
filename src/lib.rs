@@ -341,7 +341,7 @@ Disallow: /checkout/
 Disallow: /global/
 Disallow: /api/
 Disallow: /critiques/
- 
+
 Sitemap: http://sitemaps.test.net/sitemap-index.xml.gz"#;
         let mut matcher = DefaultMatcher::default();
         assert!(matcher.one_agent_allowed_by_robots(
