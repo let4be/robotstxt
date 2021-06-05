@@ -241,6 +241,139 @@ pub struct RobotsMatcher<'a, S: RobotsMatchStrategy> {
     match_strategy: S,
 }
 
+enum ParseInvoke {
+    HandleUserAgent {
+        line_num: u32,
+        user_agent: String,
+    },
+    HandleAllow {
+        line_num: u32,
+        value: String,
+    },
+    HandleDisallow {
+        line_num: u32,
+        value: String,
+    },
+    HandleSitemap {
+        line_num: u32,
+        value: String,
+    },
+    HandleUnknownAction {
+        line_num: u32,
+        action: String,
+        value: String,
+    }
+}
+
+struct CachingRobotsParseHandler<'a, S: RobotsMatchStrategy> {
+    invokes: Vec<ParseInvoke>,
+    matcher: RobotsMatcher<'a, S>,
+}
+
+impl<'a, S: RobotsMatchStrategy> CachingRobotsParseHandler<'a, S> {
+    pub fn new(matcher: RobotsMatcher<'a, S>) -> Self {
+        Self {
+            invokes: vec![],
+            matcher,
+        }
+    }
+
+    fn replay(&mut self) {
+        self.matcher.handle_robots_start();
+        for invoke in &self.invokes {
+            match invoke {
+                ParseInvoke::HandleUserAgent{line_num, user_agent} => {
+                    self.matcher.handle_user_agent(*line_num, &user_agent)
+                },
+                ParseInvoke::HandleAllow{line_num, value} => {
+                    self.matcher.handle_allow(*line_num, &value)
+                },
+                ParseInvoke::HandleDisallow{line_num, value} => {
+                    self.matcher.handle_disallow(*line_num, &value)
+                },
+                ParseInvoke::HandleSitemap{line_num, value} => {
+                    self.matcher.handle_sitemap(*line_num, &value)
+                },
+                ParseInvoke::HandleUnknownAction{line_num, action, value} => {
+                    self.matcher.handle_unknown_action(*line_num, &action, &value)
+                },
+            }
+        }
+        self.matcher.handle_robots_end();
+    }
+
+    pub fn allowed_by_robots(&mut self, user_agents: Vec<&'a str>, url: &'a str) -> bool {
+        let path = super::get_path_params_query(url);
+        self.matcher.init_user_agents_and_path(user_agents, path);
+        self.replay();
+        !self.matcher.disallow()
+    }
+}
+
+impl<'a, S: RobotsMatchStrategy> RobotsParseHandler for CachingRobotsParseHandler<'a, S> {
+    fn handle_robots_start(&mut self) {}
+
+    fn handle_robots_end(&mut self) {}
+
+    fn handle_user_agent(&mut self, line_num: u32, user_agent: &str) {
+        self.invokes.push(ParseInvoke::HandleUserAgent {
+            line_num,
+            user_agent: String::from(user_agent)
+        })
+    }
+
+    fn handle_allow(&mut self, line_num: u32, value: &str) {
+        self.invokes.push(ParseInvoke::HandleAllow {
+            line_num,
+            value: String::from(value)
+        })
+    }
+
+    fn handle_disallow(&mut self, line_num: u32, value: &str) {
+        self.invokes.push(ParseInvoke::HandleDisallow {
+            line_num,
+            value: String::from(value)
+        })
+    }
+
+    fn handle_sitemap(&mut self, line_num: u32, value: &str) {
+        self.invokes.push(ParseInvoke::HandleSitemap {
+            line_num,
+            value: String::from(value),
+        })
+    }
+
+    fn handle_unknown_action(&mut self, line_num: u32, action: &str, value: &str) {
+        self.invokes.push(ParseInvoke::HandleUnknownAction {
+            line_num,
+            action: String::from(action),
+            value: String::from(value)
+        })
+    }
+}
+
+pub struct CachingRobotsMatcher<'a, S: RobotsMatchStrategy> {
+    handler: CachingRobotsParseHandler<'a, S>
+}
+
+impl<'a, S: RobotsMatchStrategy> CachingRobotsMatcher<'a, S> {
+    pub fn new(matcher: RobotsMatcher<'a, S>, robots_body: &str) -> Self {
+        let mut s = Self {
+            handler: CachingRobotsParseHandler::new(matcher)
+        };
+        super::parse_robotstxt(robots_body, &mut s.handler);
+        s
+    }
+
+    pub fn allowed_by_robots(&mut self, user_agents: Vec<&'a str>, url: &'a str) -> bool {
+        self.handler.allowed_by_robots(user_agents, url)
+    }
+
+    pub fn one_agent_allowed_by_robots(&mut self, user_agent: &'a str, url: &'a str) -> bool {
+        self.handler.allowed_by_robots(vec![user_agent], url)
+    }
+}
+
 impl<'a, S: RobotsMatchStrategy> RobotsMatcher<'a, S> {
     /// Initialize next path and user-agents to check. Path must contain only the
     /// path, params, and query (if any) of the url and must start with a '/'.
