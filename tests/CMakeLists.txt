@@ -50,7 +50,6 @@ ENDIF ()
 ########### compiler flags ##############
 
 set(COMPILER_FLAGS_TO_CHECK "-Wall" "-Werror=implicit-function-declaration")
-
 ########### project files ###############
 
 include_directories(./src)
@@ -60,7 +59,7 @@ include_directories(./src)
 enable_testing()
 
 add_executable(robots-test ./src/robots_test.cc)
-target_link_libraries(robots-test absl::base absl::container absl::strings gtest_main)
+target_link_libraries(robots-test absl::base absl::container absl::strings gtest_main dl)
 
 ############ Rust lib ############
 

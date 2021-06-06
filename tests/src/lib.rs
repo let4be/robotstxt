@@ -16,7 +16,7 @@
 use std::ffi::CStr;
 use std::os::raw::c_char;
 
-use robotstxt::DefaultMatcher;
+use robotstxt::{DefaultMatcher, DefaultCachingMatcher};
 
 #[no_mangle]
 pub extern "C" fn is_user_agent_allowed(
@@ -37,6 +37,31 @@ pub extern "C" fn is_user_agent_allowed(
         println!("{} {} {}", robotstxt, user_agent, url);
         let mut matcher = DefaultMatcher::default();
         matcher.one_agent_allowed_by_robots(&robotstxt, user_agent, url)
+    } else {
+        panic!("Invalid parameters");
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn is_user_agent_allowed_caching(
+    robotstxt: *const c_char,
+    user_agent: *const c_char,
+    url: *const c_char,
+) -> bool {
+    if let (Ok(robotstxt), Ok(user_agent), Ok(url)) = unsafe {
+        assert!(!robotstxt.is_null());
+        assert!(!user_agent.is_null());
+        assert!(!url.is_null());
+        (
+            CStr::from_ptr(robotstxt).to_str(),
+            CStr::from_ptr(user_agent).to_str(),
+            CStr::from_ptr(url).to_str(),
+        )
+    } {
+        println!("{} {} {}", robotstxt, user_agent, url);
+        let mut matcher = DefaultCachingMatcher::new(DefaultMatcher::default());
+        matcher.parse(&robotstxt);
+        matcher.one_agent_allowed_by_robots(user_agent, url)
     } else {
         panic!("Invalid parameters");
     }

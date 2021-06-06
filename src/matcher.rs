@@ -96,7 +96,7 @@ impl MatchHierarchy {
 /// it's pretty obvious what the webmaster wants: they want to allow crawl of
 /// every URI except /cgi-bin. However, according to the expired internet
 /// standard, crawlers should be allowed to crawl everything with such a rule.
-pub trait RobotsMatchStrategy {
+pub trait RobotsMatchStrategy: Default {
     fn match_allow(&self, path: &str, pattern: &str) -> i32;
 
     fn match_disallow(&self, path: &str, pattern: &str) -> i32;
@@ -351,24 +351,26 @@ impl<S: RobotsMatchStrategy> RobotsParseHandler for CachingRobotsParseHandler<S>
 }
 
 pub struct CachingRobotsMatcher<S: RobotsMatchStrategy> {
-    handler: CachingRobotsParseHandler<S>,
+    parse_handler: CachingRobotsParseHandler<S>,
 }
 
 impl<S: RobotsMatchStrategy> CachingRobotsMatcher<S> {
-    pub fn new(matcher: RobotsMatcher<S>, robots_body: &str) -> Self {
-        let mut s = Self {
-            handler: CachingRobotsParseHandler::new(matcher),
-        };
-        super::parse_robotstxt(robots_body, &mut s.handler);
-        s
+    pub fn new(matcher: RobotsMatcher<S>) -> Self {
+        Self {
+            parse_handler: CachingRobotsParseHandler::new(matcher),
+        }
+    }
+
+    pub fn parse(&mut self, robots_body: &str) {
+        super::parse_robotstxt(robots_body, &mut self.parse_handler);
     }
 
     pub fn allowed_by_robots(&mut self, user_agents: Vec<&str>, url: &str) -> bool {
-        self.handler.allowed_by_robots(user_agents, url)
+        self.parse_handler.allowed_by_robots(user_agents, url)
     }
 
     pub fn one_agent_allowed_by_robots(&mut self, user_agent: &str, url: &str) -> bool {
-        self.handler.allowed_by_robots(vec![user_agent], url)
+        self.parse_handler.allowed_by_robots(vec![user_agent], url)
     }
 }
 

@@ -28,7 +28,7 @@
 
 bool IsUserAgentAllowed(const absl::string_view robotstxt,
                         const std::string& useragent, const std::string& url) {
-    return is_user_agent_allowed(std::string(robotstxt).c_str(), useragent.c_str(), url.c_str());
+    return is_user_agent_allowed(std::string(robotstxt).c_str(), useragent.c_str(), url.c_str()) && is_user_agent_allowed_caching(std::string(robotstxt).c_str(), useragent.c_str(), url.c_str());
 }
 
 bool IsValidUserAgentToObey(

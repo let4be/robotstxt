@@ -30,16 +30,14 @@
 //! assert_eq!(false, matcher.one_agent_allowed_by_robots(robots_body, "FooBot", "https://foo.com/"));
 //! ```
 
-use matcher::{LongestMatchRobotsMatchStrategy, RobotsMatcher};
-use parser::RobotsTxtParser;
-
-/// A matcher module.
 pub mod matcher;
-/// A parser module.
 pub mod parser;
 
-/// A default [RobotsMatcher] with [LongestMatchRobotsMatchStrategy].
+use crate::matcher::{CachingRobotsMatcher, LongestMatchRobotsMatchStrategy, RobotsMatcher};
+use crate::parser::RobotsTxtParser;
+
 pub type DefaultMatcher = RobotsMatcher<LongestMatchRobotsMatchStrategy>;
+pub type DefaultCachingMatcher = CachingRobotsMatcher<LongestMatchRobotsMatchStrategy>;
 
 /// Handler for directives found in robots.txt.
 pub trait RobotsParseHandler {

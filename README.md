@@ -22,13 +22,22 @@ robotstxt = "0.3.0"
 ## Quick start
 
 ```rust
-use robotstxt::DefaultMatcher;
+use robotstxt::{DefaultMatcher,DefaultCachingMatcher};
 
-let mut matcher = DefaultMatcher::default();
-let robots_body = "user-agent: FooBot\n\
+fn main() {
+    let mut matcher = DefaultCachingMatcher::new(DefaultMatcher::default());
+    let robots_body = "user-agent: FooBot\n\
                    disallow: /\n";
-assert_eq!(false, matcher.one_agent_allowed_by_robots(robots_body, "FooBot", "https://foo.com/"));
+    matcher.parse(robots_body);
+    assert_eq!(false, matcher.one_agent_allowed_by_robots("FooBot", "https://foo.com/"));
+}
 ```
+
+## This fork
+
+- An attempt for reducing unnecessary CPU waste, - full parsing of `robots.txt` can be done just once
+- An attempt of cleaning up the library a bit and reducing reference/life-time clutter which make it difficult to use in a real project
+- Fixed original google test(pinned cmake dependencies, --no-as-needed build, LD linking)
 
 ## About
 
@@ -51,7 +60,7 @@ $ cd robotstxt/tests
 ...
 $ mkdir c-build && cd c-build
 ...
-$ cmake ..
+$ LDFLAGS="-Wl,--no-as-needed" cmake ..
 ...
 $ make
 ...
