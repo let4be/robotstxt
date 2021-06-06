@@ -32,7 +32,7 @@
 use std::env;
 use std::fs;
 
-use robotstxt::{DefaultCachingMatcher, DefaultMatcher};
+use robotstxt_with_cache::{DefaultCachingMatcher, DefaultMatcher};
 
 fn show_help(name: &str) {
     eprintln!(
