@@ -1,5 +1,5 @@
 [package]
-name = "robotstxt"
+name = "robotstxt-with-cache"
 version = "0.3.0"
 description = "A native Rust port of Google's robots.txt parser and matcher C++ library."
 authors = ["Folyd <lyshuhow@gmail.com>"]
